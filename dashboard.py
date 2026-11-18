@@ -37,7 +37,7 @@ CONFIG_PATH = BASE / "config.yaml"
 load_env_files(BASE)
 
 ON_VERCEL = bool(os.getenv("VERCEL"))
-PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
+PASSWORD = os.getenv("DASHBOARD_PASSWORD", "").strip()
 CRON_SECRET = os.getenv("CRON_SECRET", "")
 MAX_RESUME_BYTES = 3 * 1024 * 1024  # Vercel request bodies are limited to 4.5 MB
 
@@ -79,7 +79,9 @@ def login():
     if ON_VERCEL and not PASSWORD:
         return render_template("login.html", setup_error=True), 503
     if request.method == "POST":
-        if PASSWORD and hmac.compare_digest(request.form.get("password", ""), PASSWORD):
+        # ignore spaces/line breaks that phones often add when pasting
+        typed = request.form.get("password", "").strip()
+        if PASSWORD and hmac.compare_digest(typed.encode(), PASSWORD.encode()):
             session.permanent = True
             session["ok"] = True
             nxt = request.args.get("next", "/")

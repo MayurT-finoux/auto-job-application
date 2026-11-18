@@ -131,6 +131,11 @@ label.f { display: block; font-weight: 600; font-size: 13px; margin-bottom: 4px;
 pre.log { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
   max-height: 360px; overflow: auto; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-word; }
 .empty { color: var(--muted); padding: 20px; text-align: center; }
+/* Keep last: 16px stops iPhones zooming into fields, which makes long-press -> Paste unreliable */
+@media (max-width: 700px) {
+  input[type=text], input[type=number], input[type=search], input[type=time], input[type=password],
+  textarea, textarea.tpl-text, select { font-size: 16px; }
+}
 </style>
 </head>
 <body>
