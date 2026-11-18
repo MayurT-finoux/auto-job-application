@@ -1,0 +1,31 @@
+# Job profile: what the bot searches for. Edit here or from the dashboard.
+# The bot re-reads this file before every search round.
+job_description: |
+  We are looking for a Python Developer with experience in Django/FastAPI,
+  REST APIs, SQL databases and AWS. Experience with Docker is a plus.
+role_titles:
+  - Python Developer
+  - Backend Developer
+keywords:
+  - python
+  - django
+  - fastapi
+  - sql
+  - aws
+  - rest
+  - api
+exclude_keywords:
+  - intern
+  - internship
+  - principal
+experience:
+  min: 2
+  max: 5
+locations:
+  - Mumbai
+  - Pune
+work_modes:
+  - onsite
+  - hybrid
+  - remote
+min_score: 0.4

@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Applier</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f4f2; --surface: #fcfcfb; --border: #e3e2de;
+  --text: #0b0b0b; --text-2: #52514e; --muted: #75746f;
+  --accent: #2a78d6; --accent-ink: #ffffff; --series-1: #2a78d6;
+  --good: #0ca30c; --warning: #fab219; --critical: #d03b3b;
+  --good-bg: #e6f5e6; --critical-bg: #fbeaea; --warning-bg: #fff4dc; --info-bg: #e8f1fc;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #2e2e2c;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #9a998f;
+    --accent: #3987e5; --series-1: #3987e5;
+    --good-bg: #13301a; --critical-bg: #3a1a1a; --warning-bg: #3a2e10; --info-bg: #15263c;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--accent); }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 15px; margin: 0 0 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+
+/* status pill */
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; border: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.pill.run .dot { background: var(--good); } .pill.run { background: var(--good-bg); }
+.pill.stop .dot { background: var(--muted); }
+.pill.emailed { background: var(--good-bg); } .pill.emailed .dot { background: var(--good); }
+.pill.manual { background: var(--info-bg); } .pill.manual .dot { background: var(--accent); }
+.pill.new { background: var(--warning-bg); } .pill.new .dot { background: var(--warning); }
+.pill.failed { background: var(--critical-bg); } .pill.failed .dot { background: var(--critical); }
+.pill.dry { background: transparent; } .pill.dry .dot { background: var(--muted); }
+
+/* buttons */
+button, .btn { font: inherit; border-radius: 8px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); padding: 6px 12px; cursor: pointer; text-decoration: none; display: inline-block; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.danger { color: var(--critical); }
+button:hover, .btn:hover { filter: brightness(0.96); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.controls form { margin: 0; }
+.resume-current { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 14px; }
+.resume-current a { font-weight: 600; word-break: break-all; }
+button.ghost { background: transparent; }
+button:disabled { opacity: .6; cursor: progress; }
+h2 .export { font-weight: 400; margin-left: 8px; }
+
+/* tabs */
+nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; overflow-x: auto; }
+nav.tabs a { padding: 8px 14px; text-decoration: none; color: var(--text-2); border-bottom: 2px solid transparent; white-space: nowrap; }
+nav.tabs a.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.panel { display: none; } .panel.active { display: block; }
+
+/* stat tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.tile .label { color: var(--text-2); font-size: 12px; }
+.tile .value { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.tile .sub { color: var(--muted); font-size: 12px; }
+
+/* bar chart (HTML bars so text never stretches) */
+.chart { position: relative; padding-left: 28px; }
+.chart .plot { position: relative; height: 180px; }
+.chart .gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); }
+.chart .gridline span { position: absolute; left: -28px; width: 22px; text-align: right; transform: translateY(-50%);
+  color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .cols { position: absolute; inset: 0; display: flex; }
+.chart .col { flex: 1; display: flex; align-items: flex-end; justify-content: center; }
+.chart .bar { width: min(60%, 28px); background: var(--series-1); border-radius: 4px 4px 0 0; }
+.chart .col:hover .bar { filter: brightness(1.12); }
+.chart .xlabels { display: flex; margin-top: 6px; }
+.chart .xlabels span { flex: 1; text-align: center; color: var(--muted); font-size: 11px; white-space: nowrap; }
+@media (max-width: 600px) { .chart .xlabels span.alt { visibility: hidden; } }
+.tip { position: absolute; pointer-events: none; background: var(--text); color: var(--surface); padding: 4px 8px;
+  border-radius: 6px; font-size: 12px; white-space: nowrap; transform: translate(-50%, -115%); display: none; z-index: 2; }
+
+/* tables */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--text-2); font-weight: 600; font-size: 12px; white-space: nowrap; }
+td.desc { color: var(--text-2); max-width: 420px; font-size: 12px; }
+td.desc div { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+td.nowrap { white-space: nowrap; }
+td .title { font-weight: 600; }
+.filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+input[type=text], input[type=number], input[type=search], input[type=time], textarea, select {
+  font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 10px; width: 100%; }
+.filter-row input, .filter-row select { width: auto; flex: 1 1 180px; }
+
+/* form */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+label.f { display: block; font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.hint { color: var(--muted); font-size: 12px; font-weight: 400; }
+.checks { display: flex; gap: 16px; flex-wrap: wrap; padding-top: 6px; }
+.checks label { display: flex; gap: 6px; align-items: center; }
+.row2 { display: flex; gap: 8px; }
+
+.flash { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--border); }
+.flash.ok { background: var(--good-bg); } .flash.error { background: var(--critical-bg); }
+pre.log { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+  max-height: 360px; overflow: auto; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-word; }
+.empty { color: var(--muted); padding: 20px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>Job Applier</h1>
+    <div class="muted small">
+      One email every {{ settings.interval_minutes }} min · daily limit {{ stats.daily_limit }}{% if settings.active_hours_enabled %} · {{ settings.active_start }}–{{ settings.active_end }}{% endif %}
+      {% if settings.test_recipient %} · <strong>test mode</strong>: all emails go to {{ settings.test_recipient }}{% endif %}
+    </div>
+  </div>
+  <div class="controls">
+    {% if paused %}
+      <span class="pill stop"><span class="dot"></span>Paused</span>
+      <form method="post" action="{{ url_for('bot_action', action='resume') }}"><button class="primary">Resume bot</button></form>
+    {% else %}
+      <span class="pill run"><span class="dot"></span>Active</span>
+      <form method="post" action="{{ url_for('bot_action', action='pause') }}"><button>Pause bot</button></form>
+    {% endif %}
+    <form method="post" action="{{ url_for('bot_action', action='run') }}" class="busy-form"
+          data-confirm="Send one application now?{% if settings.test_recipient %} (test mode: it goes to {{ settings.test_recipient }}){% endif %}">
+      <button>Run now</button></form>
+    <form method="post" action="{{ url_for('bot_action', action='dry-run') }}" class="busy-form"><button>Dry run</button></form>
+    <a class="btn" href="{{ url_for('index', tab=tab) }}">Refresh</a>
+    {% if auth_enabled %}<form method="post" action="{{ url_for('logout') }}"><button class="ghost">Log out</button></form>{% endif %}
+  </div>
+</header>
+
+{% with msgs = get_flashed_messages(with_categories=true) %}
+  {% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}
+{% endwith %}
+
+<nav class="tabs">
+  <a href="?tab=overview" data-tab="overview">Overview</a>
+  <a href="?tab=applications" data-tab="applications">Email applications ({{ apps|length }})</a>
+  <a href="?tab=openings" data-tab="openings">Job openings ({{ stats.openings }})</a>
+  <a href="?tab=profile" data-tab="profile">Job profile</a>
+  <a href="?tab=settings" data-tab="settings">Settings{% if checks|rejectattr("ok")|list %} ⚠{% endif %}</a>
+  <a href="?tab=log" data-tab="log">Bot log</a>
+</nav>
+
+<!-- ============================ OVERVIEW -->
+<section class="panel" id="overview">
+  <div class="tiles">
+    <div class="tile"><div class="label">Applications emailed</div><div class="value">{{ stats.sent_total }}</div><div class="sub">all time</div></div>
+    <div class="tile"><div class="label">Emailed today</div><div class="value">{{ stats.sent_today }}</div><div class="sub">of {{ stats.daily_limit }} allowed</div></div>
+    <div class="tile"><div class="label">Openings found</div><div class="value">{{ stats.openings }}</div><div class="sub">{{ stats.openings_today }} new today</div></div>
+    <div class="tile"><div class="label">Applied manually</div><div class="value">{{ stats.manual }}</div><div class="sub">{{ stats.new }} openings not applied yet</div></div>
+    <div class="tile"><div class="label">Failed sends</div><div class="value">{{ stats.failed }}</div><div class="sub">see Email applications</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Applications emailed per day <span class="muted small">(last 14 days)</span></h2>
+    {% set top = series_max if series_max > 4 else 4 %}
+    {% set step = ((top / 4)|round(0, 'ceil'))|int %}{% set top = step * 4 %}
+    <div class="chart" id="chart" role="img" aria-label="Bar chart of applications emailed per day over the last 14 days">
+      <div class="plot">
+        {% for t in range(4, -1, -1) %}
+        <div class="gridline" style="bottom: {{ 100 * t / 4 }}%"><span>{{ step * t }}</span></div>
+        {% endfor %}
+        <div class="cols">
+          {% for d in series %}
+          <div class="col" data-label="{{ d.label }}" data-count="{{ d.count }}">
+            {% if d.count > 0 %}<div class="bar" style="height: {{ 100 * d.count / top }}%"></div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="xlabels">
+        {% for d in series %}<span{% if loop.index0 % 4 != 1 %} class="alt"{% endif %}>{% if loop.index0 % 2 == 1 %}{{ d.label }}{% endif %}</span>{% endfor %}
+      </div>
+      <div class="tip" id="tip"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Bot status</h2>
+    <div class="small">
+      {% if status.last_run %}
+      <div><strong>Last run:</strong> {{ status.last_run }} ({{ status.duration_s }} s) · {{ status.last_result }}</div>
+      {% if status.next_due and not paused %}<div><strong>Next application due:</strong> {{ status.next_due }}{% if settings.active_hours_enabled %} (within active hours){% endif %}</div>{% endif %}
+      <div class="muted">Leads waiting in queue: {{ status.queue }}</div>
+      {% else %}
+      <div class="muted">The bot hasn't run yet. {% if on_vercel %}Vercel runs it every 15 minutes{% else %}Start it with <code>python main.py</code>{% endif %}, or press <strong>Run now</strong>.</div>
+      {% endif %}
+      {% set bad = checks|rejectattr("ok")|list %}
+      {% if bad %}<div class="flash error" style="margin:10px 0 0">Setup needed: {% for c in bad %}{{ c.name }} — {{ c.detail }}{% if not loop.last %}; {% endif %}{% endfor %}. See <a href="?tab=settings">Settings</a>.</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Latest email applications</h2>
+    {% if apps %}
+    <div class="table-wrap"><table>
+      <tr><th>When</th><th>Company</th><th>Role</th><th>Sent to</th><th>Status</th></tr>
+      {% for a in apps[:5] %}
+      <tr><td class="small nowrap">{{ a.ts }}</td><td>{{ a.company }}</td><td>{{ a.role }}</td><td>{{ a.email }}</td>
+          <td>{% include "_status.html" %}</td></tr>
+      {% endfor %}
+    </table></div>
+    {% else %}<div class="empty">No applications yet. Start the bot to begin.</div>{% endif %}
+  </div>
+</section>
+
+<!-- ============================ APPLICATIONS -->
+<section class="panel" id="applications">
+  <div class="card">
+    <h2>Applications sent by email <a class="small export" href="{{ url_for('export_csv', name='applications') }}">Download CSV</a></h2>
+    <div class="filter-row">
+      <input type="search" placeholder="Search company, role, email…" data-filter="apps-table">
+      <select data-status-filter="apps-table">
+        <option value="">All statuses</option><option value="sent">Sent</option>
+        <option value="failed">Failed</option><option value="dry-run">Dry run</option>
+      </select>
+    </div>
+    {% if apps %}
+    <div class="table-wrap"><table id="apps-table">
+      <tr><th>When</th><th>Company</th><th>Role</th><th>Sent to</th><th>Source</th><th>Status</th></tr>
+      {% for a in apps %}
+      <tr data-status="{{ a.status }}">
+        <td class="small nowrap">{{ a.ts }}</td>
+        <td>{{ a.company }}</td>
+        <td>{{ a.role }}</td>
+        <td>{{ a.email }}</td>
+        <td class="small">{% if a.safe_url %}<a href="{{ a.safe_url }}" target="_blank" rel="noopener noreferrer">{{ a.source }} ↗</a>{% else %}{{ a.source }}{% endif %}</td>
+        <td>{% include "_status.html" %}{% if a.error %}<div class="small muted">{{ a.error }}</div>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% else %}<div class="empty">No applications yet.</div>{% endif %}
+  </div>
+</section>
+
+<!-- ============================ OPENINGS -->
+<section class="panel" id="openings">
+  <div class="card">
+    {% if show_previous %}
+    <h2>Openings from previous job profiles <a class="small export" href="?tab=openings">← Back to current profile</a></h2>
+    <p class="muted small" style="margin-top:-6px">Found while you were searching with an earlier job profile. Kept for your records; the bot doesn't use them.</p>
+    {% else %}
+    <h2>Job openings for your current profile
+      <a class="small export" href="{{ url_for('export_csv', name='openings') }}">Download CSV</a>
+      {% if previous_count %}<a class="small export" href="?tab=openings&previous=1">Show previous ({{ previous_count }})</a>{% endif %}</h2>
+    <p class="muted small" style="margin-top:-6px">Matching openings found for the job profile you have now. Job-board postings (LinkedIn, Naukri…) can't be applied to by email — open the link and apply there, then mark it here.</p>
+    {% endif %}
+    <div class="filter-row">
+      <input type="search" placeholder="Search company, title, description…" data-filter="open-table">
+      <select data-status-filter="open-table">
+        <option value="">All</option><option value="new">Not applied</option>
+        <option value="emailed">Emailed by bot</option><option value="manual">Applied manually</option>
+      </select>
+    </div>
+    {% if openings %}
+    <div class="table-wrap"><table id="open-table">
+      <tr><th>Found</th><th>Opening</th><th>Experience</th><th>Mode</th><th>Description</th><th>Status</th><th></th></tr>
+      {% for o in openings %}
+      <tr data-status="{{ o.status }}">
+        <td class="small nowrap">{{ o.found_at[:10] }}</td>
+        <td>
+          <div class="title">{% if o.safe_url %}<a href="{{ o.safe_url }}" target="_blank" rel="noopener noreferrer">{{ o.title }}</a>{% else %}{{ o.title }}{% endif %}</div>
+          <div class="small muted">{{ o.company }} · {{ o.source }} · {{ o.apply_via }}</div>
+          {% if o.email_in_post %}<div class="small">✉ {{ o.email_in_post }}</div>{% endif %}
+        </td>
+        <td class="small">{{ o.experience or "—" }}</td>
+        <td class="small">{{ o.work_mode or "—" }}</td>
+        <td class="desc"><div title="{{ o.description }}">{{ o.description }}</div></td>
+        <td>
+          {% if o.status == "emailed" %}<span class="pill emailed"><span class="dot"></span>Emailed</span>
+          {% elif o.status == "manual" %}<span class="pill manual"><span class="dot"></span>Applied manually</span>
+          {% else %}<span class="pill new"><span class="dot"></span>Not applied</span>{% endif %}
+        </td>
+        <td>{% if o.status == "new" %}
+          <form method="post" action="{{ url_for('mark_opening') }}"><input type="hidden" name="url" value="{{ o.url }}"><button class="small">Mark applied</button></form>
+        {% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% elif show_previous %}<div class="empty">No openings from previous job profiles.</div>
+    {% else %}<div class="empty">No openings for this job profile yet. Press <strong>Dry run</strong> to search now, or they'll appear after the bot's next scheduled search{% if settings.active_hours_enabled %} (between {{ settings.active_start }} and {{ settings.active_end }}){% endif %}.</div>{% endif %}
+  </div>
+</section>
+
+<!-- ============================ PROFILE -->
+<section class="panel" id="profile">
+  <div class="card">
+    <h2>Resume</h2>
+    <p class="muted small" style="margin-top:-6px">Attached to every application email. Stored in the database, so it never needs to be committed to git.</p>
+    {% if resume %}
+    <div class="resume-current">
+      <span class="pill emailed"><span class="dot"></span>In use</span>
+      <a href="{{ url_for('view_resume') }}" target="_blank" rel="noopener">{{ resume.name }}</a>
+      <span class="small muted">{{ resume.kb }} KB{% if resume.uploaded_at %} · uploaded {{ resume.uploaded_at }}{% else %} · {{ resume.source }}{% endif %}</span>
+    </div>
+    {% else %}
+    <div class="flash error">No resume yet. The bot can't send applications until you upload one.</div>
+    {% endif %}
+    <form method="post" action="{{ url_for('upload_resume') }}" enctype="multipart/form-data" id="resume-form">
+      <label class="f" for="resume-file">{% if resume %}Replace resume{% else %}Upload resume{% endif %} <span class="hint">— PDF, under 3 MB</span></label>
+      <div class="controls">
+        <input id="resume-file" type="file" name="resume" accept="application/pdf,.pdf" required style="width:auto;max-width:100%">
+        <button class="primary">{% if resume %}Replace{% else %}Upload{% endif %}</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Job profile</h2>
+    <p class="muted small" style="margin-top:-6px">What the bot searches for. Saving a changed profile starts a fresh Job openings list; openings from the old profile are kept under "Show previous".</p>
+    {% if profile_error %}<div class="flash error">Current job_profile.yaml is invalid: {{ profile_error }}</div>{% endif %}
+    <form method="post" action="{{ url_for('update_profile') }}">
+      <div style="margin-bottom:14px">
+        <label class="f" for="jd">Job description <span class="hint">— paste the JD; its most frequent skill words are used for matching</span></label>
+        <textarea id="jd" name="job_description" rows="7">{{ profile.job_description or "" }}</textarea>
+      </div>
+      <div class="form-grid">
+        <div>
+          <label class="f" for="roles">Job titles <span class="hint">— one per line</span></label>
+          <textarea id="roles" name="role_titles" rows="4">{{ (profile.role_titles or [])|join("\n") }}</textarea>
+        </div>
+        <div>
+          <label class="f" for="kw">Required keywords / skills <span class="hint">— comma separated</span></label>
+          <textarea id="kw" name="keywords" rows="4">{{ (profile.keywords or [])|join(", ") }}</textarea>
+        </div>
+        <div>
+          <label class="f" for="ex">Skip postings whose title contains <span class="hint">— comma separated</span></label>
+          <textarea id="ex" name="exclude_keywords" rows="4">{{ (profile.exclude_keywords or [])|join(", ") }}</textarea>
+        </div>
+        <div>
+          <label class="f" for="loc">Locations <span class="hint">— one per line</span></label>
+          <textarea id="loc" name="locations" rows="4">{{ (profile.locations or [])|join("\n") }}</textarea>
+        </div>
+        <div>
+          <label class="f">Experience range (years)</label>
+          <div class="row2">
+            <input type="number" name="exp_min" min="0" max="50" step="0.5" value="{{ profile.experience.min if profile.experience else 0 }}" aria-label="Minimum years">
+            <input type="number" name="exp_max" min="0" max="50" step="0.5" value="{{ profile.experience.max if profile.experience else 5 }}" aria-label="Maximum years">
+          </div>
+          <label class="f" style="margin-top:12px">Work mode</label>
+          <div class="checks">
+            {% for m in work_modes %}
+            <label><input type="checkbox" name="work_modes" value="{{ m }}" {% if m in (profile.work_modes or []) %}checked{% endif %}> {{ m|capitalize }}</label>
+            {% endfor %}
+          </div>
+        </div>
+        <div>
+          <label class="f" for="ms">Match strictness <span class="hint">— 0 to 1; higher = fewer, closer matches</span></label>
+          <input id="ms" type="number" name="min_score" min="0" max="1" step="0.05" value="{{ profile.min_score if profile.min_score is defined else 0.3 }}">
+        </div>
+      </div>
+      <div style="margin-top:16px"><button class="primary">Save job profile</button></div>
+    </form>
+  </div>
+</section>
+
+<!-- ============================ SETTINGS -->
+<section class="panel" id="settings">
+  <div class="card">
+    <h2>Setup checklist</h2>
+    <table>
+      {% for c in checks %}
+      <tr><td style="width:96px">{% if c.ok %}<span class="pill emailed"><span class="dot"></span>OK</span>{% else %}<span class="pill failed"><span class="dot"></span>Needed</span>{% endif %}</td>
+          <td><strong>{{ c.name }}</strong><div class="small muted">{{ c.detail }}</div></td></tr>
+      {% endfor %}
+    </table>
+    <p class="small muted">Secrets (Gmail, database, CRON_SECRET, DASHBOARD_PASSWORD) are environment variables: set them in Vercel → Project → Settings → Environment Variables, or in <code>.env</code> locally.</p>
+  </div>
+
+  <div class="card">
+    <h2>Sending</h2>
+    <form method="post" action="{{ url_for('update_settings') }}">
+      <div class="form-grid">
+        <div>
+          <label class="f" for="iv">Send one application every <span class="hint">— minutes, at least 15</span></label>
+          <input id="iv" type="number" name="interval_minutes" min="15" step="5" value="{{ settings.interval_minutes }}">
+        </div>
+        <div>
+          <label class="f" for="dl">Daily limit <span class="hint">— max emails per day</span></label>
+          <input id="dl" type="number" name="daily_limit" min="1" max="200" value="{{ settings.daily_limit }}">
+        </div>
+        <div>
+          <label class="f" for="tr">Test recipient <span class="hint">— if set, every email goes here instead</span></label>
+          <input id="tr" type="text" name="test_recipient" placeholder="you@gmail.com" value="{{ settings.test_recipient }}">
+        </div>
+        <div>
+          <label class="f">Active hours</label>
+          <div class="checks" style="padding-top:0;margin-bottom:6px">
+            <label><input type="checkbox" name="active_hours_enabled" {% if settings.active_hours_enabled %}checked{% endif %}> Only send between</label>
+          </div>
+          <div class="row2">
+            <input type="time" name="active_start" value="{{ settings.active_start }}" aria-label="Start time">
+            <input type="time" name="active_end" value="{{ settings.active_end }}" aria-label="End time">
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px"><button class="primary">Save settings</button></div>
+    </form>
+  </div>
+
+</section>
+
+<!-- ============================ LOG -->
+<section class="panel" id="log">
+  <div class="card">
+    <h2>Bot log <span class="muted small">(latest 80 lines)</span></h2>
+    {% if log_lines %}<pre class="log">{{ log_lines|join("\n") }}</pre>
+    {% else %}<div class="empty">No log yet.</div>{% endif %}
+  </div>
+</section>
+
+</div>
+<script>
+// tabs
+(function () {
+  const tab = new URLSearchParams(location.search).get("tab") || "overview";
+  const active = document.getElementById(tab) ? tab : "overview";
+  document.getElementById(active).classList.add("active");
+  document.querySelector(`nav.tabs a[data-tab="${active}"]`).classList.add("active");
+})();
+
+// table search + status filters
+function applyFilter(tableId) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const q = (document.querySelector(`[data-filter="${tableId}"]`).value || "").toLowerCase();
+  const st = document.querySelector(`[data-status-filter="${tableId}"]`).value;
+  [...table.rows].slice(1).forEach(r => {
+    const ok = (!q || r.textContent.toLowerCase().includes(q)) && (!st || r.dataset.status === st);
+    r.style.display = ok ? "" : "none";
+  });
+}
+document.querySelectorAll("[data-filter]").forEach(el => el.addEventListener("input", () => applyFilter(el.dataset.filter)));
+document.querySelectorAll("[data-status-filter]").forEach(el => el.addEventListener("change", () => applyFilter(el.dataset.statusFilter)));
+
+// chart tooltip
+(function () {
+  const chart = document.getElementById("chart"), tip = document.getElementById("tip");
+  if (!chart) return;
+  chart.querySelectorAll(".col[data-label]").forEach(g => {
+    g.addEventListener("mousemove", e => {
+      const box = chart.getBoundingClientRect();
+      const n = +g.dataset.count;
+      tip.textContent = `${g.dataset.label}: ${n} application${n === 1 ? "" : "s"}`;
+      tip.style.left = (e.clientX - box.left) + "px";
+      tip.style.top = (e.clientY - box.top) + "px";
+      tip.style.display = "block";
+    });
+    g.addEventListener("mouseleave", () => tip.style.display = "none");
+  });
+})();
+
+// check the resume before uploading
+(function () {
+  const f = document.getElementById("resume-form");
+  if (!f) return;
+  f.addEventListener("submit", e => {
+    const file = f.querySelector("input[type=file]").files[0];
+    if (!file) return;
+    if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") { e.preventDefault(); alert("Please choose a PDF file."); }
+    else if (file.size > 3 * 1024 * 1024) { e.preventDefault(); alert("The resume must be under 3 MB."); }
+  });
+})();
+
+// "Run now" can take a few minutes: confirm, then show progress
+document.querySelectorAll("form.busy-form").forEach(f => f.addEventListener("submit", e => {
+  if (f.dataset.confirm && !confirm(f.dataset.confirm)) { e.preventDefault(); return; }
+  document.querySelectorAll("form.busy-form button").forEach(b => b.disabled = true);
+  f.querySelector("button").textContent = "Running… (up to 3 min)";
+}));
+</script>
+</body>
+</html>

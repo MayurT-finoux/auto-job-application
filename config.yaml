@@ -1,0 +1,59 @@
+# ---------------------------------------------------------------
+#  Auto Job Applier configuration
+# ---------------------------------------------------------------
+
+# Default job profile (description, roles, keywords, experience, locations, work mode).
+# It is copied into the database on first run; after that edit it in the dashboard.
+profile_path: job_profile.yaml
+
+timezone: Asia/Kolkata      # used for timestamps, "today", and active hours
+
+# --- Sending (defaults; change them live in the dashboard's Settings tab) ----
+interval_minutes: 60        # one application every N minutes (min 15)
+daily_limit: 10             # max emails per day
+active_hours:               # send only 9 AM - 6 PM IST, every day (remove to send any time)
+  start: "09:00"
+  end: "18:00"
+
+# Send every email to this address instead of the company (for testing).
+# Leave empty to send for real.
+test_recipient: ""
+
+# Local fallback if no resume has been uploaded in the dashboard.
+resume_path: resume/resume.pdf
+
+# --- Search ------------------------------------------------------
+max_queries_per_round: 8    # web searches per search round (keeps you under rate limits)
+
+# --- Search sources (all free) ------------------------------------
+sources:
+  duckduckgo: true          # no key needed
+  remotive: true            # remote jobs, no key needed (used only if work_modes has remote)
+  arbeitnow: false          # mostly Europe, no key needed
+  adzuna: false             # needs ADZUNA_APP_ID / ADZUNA_APP_KEY in .env
+  adzuna_country: in
+  jooble: false             # needs JOOBLE_API_KEY in .env
+
+# --- Email template ------------------------------------------------
+# Placeholders: {company} {role} {name} {phone} {linkedin} {experience} {email}
+applicant:
+  name: Your Name
+  phone: "+91 90000 00000"
+  linkedin: https://www.linkedin.com/in/your-profile
+  experience: "3"           # your years of experience, used in the template
+
+email_subject: "Application for {role} - {name} ({experience} yrs experience)"
+email_body: |
+  Dear Hiring Team at {company},
+
+  I came across an opening for the {role} position and would like to apply.
+  I have {experience} years of experience in Python backend development
+  (Django, FastAPI, SQL, AWS) and believe I would be a good fit for your team.
+
+  Please find my resume attached. I would welcome the chance to discuss
+  how I can contribute to {company}.
+
+  Best regards,
+  {name}
+  {phone}
+  {linkedin}
