@@ -1,7 +1,7 @@
 """Dashboard: track applications and openings, edit the job profile and settings, control the bot.
 
 Local:   python dashboard.py         -> http://127.0.0.1:5000
-Vercel:  served by api/index.py; Vercel Schedules call /api/run every 15 minutes.
+Vercel:  served via app.py (Vercel's Flask entrypoint); Vercel Schedules call /api/run every 15 minutes.
 
 Environment variables:
   DASHBOARD_PASSWORD  login password (required on Vercel)
@@ -26,8 +26,8 @@ from zoneinfo import ZoneInfo
 from flask import (Flask, Response, flash, g, jsonify, redirect, render_template, request, session,
                    url_for)
 
-from jobbot.config import (WORK_MODES, ConfigError, get_profile, get_settings, load_env_files, profile_id,
-                           read_yaml,
+from jobbot.config import (PLACEHOLDERS, WORK_MODES, ConfigError, get_email_template, get_profile,
+                           get_settings, load_env_files, profile_id, read_yaml, save_email_template,
                            save_profile, validate_settings)
 from jobbot.scheduler import run_once
 from jobbot.store import APP_FIELDS, OPENING_FIELDS, Store, database_url
@@ -152,6 +152,8 @@ def resume_info(s: Store) -> dict:
 
 def env_checks(s: Store) -> list[dict]:
     resume = resume_info(s)
+    applicant = get_email_template(s, read_yaml(CONFIG_PATH))["applicant"]
+    tpl_ok = applicant.get("name", "").strip() not in ("", "Your Name") and "90000 00000" not in applicant.get("phone", "")
     return [
         {"name": "Database", "ok": s.is_pg,
          "detail": "Neon/Postgres connected" if s.is_pg else
@@ -160,10 +162,22 @@ def env_checks(s: Store) -> list[dict]:
          "detail": os.getenv("GMAIL_USER") or "set GMAIL_USER and GMAIL_APP_PASSWORD"},
         {"name": "Resume", "ok": bool(resume),
          "detail": resume.get("name") or "upload your PDF in the Job profile tab"},
+        {"name": "Email template", "ok": tpl_ok,
+         "detail": "your details are filled in" if tpl_ok else
+                   "fill in your name, phone and LinkedIn in the Email template tab"},
         {"name": "Schedule secret", "ok": bool(CRON_SECRET) or not ON_VERCEL,
          "detail": "CRON_SECRET set" if CRON_SECRET else
                    ("set CRON_SECRET so Vercel can run the bot" if ON_VERCEL else "not needed locally")},
     ]
+
+
+def template_for_form(s: Store, raw: dict) -> dict:
+    """The saved template, or the unsaved draft if the last save was rejected."""
+    draft = session.pop("template_draft", None)
+    if draft:
+        return {"subject": draft["subject"], "body": draft["body"],
+                "applicant": {k: draft[k] for k in ("name", "phone", "linkedin", "experience")}}
+    return get_email_template(s, raw)
 
 
 # ---------------------------------------------------------------- pages
@@ -225,6 +239,8 @@ def index():
         log_lines=s.log_tail(80), checks=env_checks(s), resume=resume_info(s), on_vercel=ON_VERCEL,
         auth_enabled=bool(PASSWORD), tab=request.args.get("tab", "overview"),
         show_previous=show_previous, previous_count=previous_count,
+        email_tpl=template_for_form(s, raw), placeholders=PLACEHOLDERS,
+        gmail_user=os.getenv("GMAIL_USER", ""),
     )
 
 
@@ -253,6 +269,31 @@ def update_profile():
     except ConfigError as e:
         flash(f"Not saved: {e}", "error")
     return redirect(url_for("index", tab="profile"))
+
+
+@app.post("/template")
+@login_required
+def update_template():
+    f = request.form
+    try:
+        save_email_template(store(), {
+            "subject": f.get("subject", ""),
+            "body": f.get("body", ""),
+            "applicant": {k: f.get(k, "") for k in ("name", "phone", "linkedin", "experience")},
+        })
+        flash("Email template saved. It's used for the next application.", "ok")
+    except ConfigError as e:
+        flash(f"Not saved: {e}", "error")
+        session["template_draft"] = {k: f.get(k, "") for k in ("subject", "body", "name", "phone", "linkedin", "experience")}
+    return redirect(url_for("index", tab="template"))
+
+
+@app.post("/template/reset")
+@login_required
+def reset_template():
+    store().delete("email_template")
+    flash("Email template reset to the default from config.yaml.", "ok")
+    return redirect(url_for("index", tab="template"))
 
 
 @app.post("/settings")

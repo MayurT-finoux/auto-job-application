@@ -12,6 +12,7 @@ import base64
 import hashlib
 import json
 import os
+import string
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -187,12 +188,65 @@ def validate_settings(raw: dict) -> dict:
     return out
 
 
+# ------------------------------------------------------------------ email template
+PLACEHOLDERS = ("company", "role", "name", "phone", "linkedin", "experience", "email")
+APPLICANT_FIELDS = ("name", "phone", "linkedin", "experience")
+
+
+def _check_placeholders(text: str, label: str) -> None:
+    try:
+        names = [f for _, f, _, _ in string.Formatter().parse(text) if f is not None]
+    except ValueError:
+        raise ConfigError(f"{label} has a {{ or }} without its pair. Placeholders look like {{company}}.")
+    bad = sorted({n for n in names if n not in PLACEHOLDERS})
+    if bad:
+        shown = ", ".join("{" + b + "}" for b in bad)
+        allowed = " ".join("{" + p + "}" for p in PLACEHOLDERS)
+        raise ConfigError(f"{label} uses unknown placeholder {shown}. Allowed: {allowed}")
+
+
+def validate_email_template(raw: dict) -> dict:
+    subject = " ".join(str(raw.get("subject") or "").split())
+    body = str(raw.get("body") or "").replace("\r\n", "\n").strip()
+    if not subject:
+        raise ConfigError("The subject can't be empty")
+    if not body:
+        raise ConfigError("The email body can't be empty")
+    if len(subject) > 200 or len(body) > 5000:
+        raise ConfigError("Subject must be under 200 characters and body under 5000")
+    _check_placeholders(subject, "Subject")
+    _check_placeholders(body, "Body")
+    applicant = {k: str((raw.get("applicant") or {}).get(k) or "").strip() for k in APPLICANT_FIELDS}
+    if not applicant["name"]:
+        raise ConfigError("Your name can't be empty")
+    return {"subject": subject, "body": body, "applicant": applicant}
+
+
+def default_email_template(raw: dict) -> dict:
+    return {
+        "subject": raw.get("email_subject") or "Application for {role} - {name}",
+        "body": (raw.get("email_body") or "").strip(),
+        "applicant": {k: str((raw.get("applicant") or {}).get(k) or "") for k in APPLICANT_FIELDS},
+    }
+
+
+def get_email_template(store: "Store | None", raw: dict) -> dict:
+    """Template edited in the dashboard, else the defaults from config.yaml."""
+    saved = store.get("email_template") if store is not None else None
+    return saved or default_email_template(raw)
+
+
+def save_email_template(store: "Store", raw: dict) -> dict:
+    tpl = validate_email_template(raw)
+    store.set("email_template", tpl)
+    return tpl
+
+
 # ------------------------------------------------------------------ main loader
 def load_env_files(base: Path) -> None:
     """Load .env.local, then .env. Never overrides variables already set (e.g. on Vercel)."""
     for name in (".env.local", ".env"):
         load_dotenv(Path(base) / name, override=False)
-
 
 
 def read_yaml(path: Path) -> dict:
@@ -229,6 +283,7 @@ def load_config(path: str | Path = "config.yaml", store: "Store | None" = None,
 
     prof = get_profile(store, base / raw.get("profile_path", "job_profile.yaml"))
     s = get_settings(store, raw)
+    tpl = get_email_template(store, raw)
     tz = raw.get("timezone", "Asia/Kolkata")
 
     resume_path = base / raw.get("resume_path", "resume/resume.pdf")
@@ -258,9 +313,9 @@ def load_config(path: str | Path = "config.yaml", store: "Store | None" = None,
         resume_path=resume_path,
         max_queries_per_round=int(raw.get("max_queries_per_round", 8)),
         sources=raw.get("sources") or {"duckduckgo": True},
-        applicant=raw.get("applicant") or {},
-        email_subject=raw.get("email_subject") or "Application for {role}",
-        email_body=raw.get("email_body") or "",
+        applicant=tpl["applicant"],
+        email_subject=tpl["subject"],
+        email_body=tpl["body"],
         gmail_user=os.getenv("GMAIL_USER", "").strip(),
         gmail_app_password=os.getenv("GMAIL_APP_PASSWORD", "").replace(" ", "").strip(),
         env={k: os.getenv(k, "") for k in ("ADZUNA_APP_ID", "ADZUNA_APP_KEY", "JOOBLE_API_KEY")},

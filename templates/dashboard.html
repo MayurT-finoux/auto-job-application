@@ -59,6 +59,20 @@ button:hover, .btn:hover { filter: brightness(0.96); }
 button.ghost { background: transparent; }
 button:disabled { opacity: .6; cursor: progress; }
 h2 .export { font-weight: 400; margin-left: 8px; }
+.tpl-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.tpl-grid .card { margin-bottom: 0; }
+@media (max-width: 900px) { .tpl-grid { grid-template-columns: 1fr; } .tpl-grid .card { margin-bottom: 16px; } }
+.tpl-details { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+textarea.tpl-text { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+button.chip { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 2px 8px; border-radius: 999px; }
+.preview-card { position: sticky; top: 12px; }
+.mail { border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.mail-head { padding: 10px 12px; border-bottom: 1px solid var(--border); display: grid; gap: 2px; word-break: break-word; }
+.mail-body { padding: 12px; white-space: pre-wrap; word-break: break-word; font-size: 13px; }
+.mail-att { padding: 8px 12px; border-top: 1px solid var(--border); }
+.ph-bad { color: var(--critical); font-weight: 600; }
+button.small { font-size: 12px; padding: 4px 10px; }
 
 /* tabs */
 nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; overflow-x: auto; }
@@ -156,6 +170,7 @@ pre.log { background: var(--bg); border: 1px solid var(--border); border-radius:
   <a href="?tab=applications" data-tab="applications">Email applications ({{ apps|length }})</a>
   <a href="?tab=openings" data-tab="openings">Job openings ({{ stats.openings }})</a>
   <a href="?tab=profile" data-tab="profile">Job profile</a>
+  <a href="?tab=template" data-tab="template">Email template</a>
   <a href="?tab=settings" data-tab="settings">Settings{% if checks|rejectattr("ok")|list %} ⚠{% endif %}</a>
   <a href="?tab=log" data-tab="log">Bot log</a>
 </nav>
@@ -373,6 +388,61 @@ pre.log { background: var(--bg); border: 1px solid var(--border); border-radius:
   </div>
 </section>
 
+<!-- ============================ EMAIL TEMPLATE -->
+<section class="panel" id="template">
+  <div class="tpl-grid">
+    <div class="card">
+      <h2>Email template</h2>
+      <p class="muted small" style="margin-top:-6px">The email sent with every application. Saved in the database, so changes apply to the next email without committing anything.</p>
+      <form method="post" action="{{ url_for('update_template') }}" id="tpl-form">
+        <div class="form-grid tpl-details">
+          <div><label class="f" for="t-name">Your name</label>
+            <input id="t-name" type="text" name="name" value="{{ email_tpl.applicant.name }}" required data-ph="name"></div>
+          <div><label class="f" for="t-phone">Phone</label>
+            <input id="t-phone" type="text" name="phone" value="{{ email_tpl.applicant.phone }}" data-ph="phone"></div>
+          <div><label class="f" for="t-li">LinkedIn URL</label>
+            <input id="t-li" type="text" name="linkedin" value="{{ email_tpl.applicant.linkedin }}" data-ph="linkedin"></div>
+          <div><label class="f" for="t-exp">Years of experience</label>
+            <input id="t-exp" type="text" name="experience" value="{{ email_tpl.applicant.experience }}" data-ph="experience"></div>
+        </div>
+
+        <label class="f" for="t-subject" style="margin-top:14px">Subject</label>
+        <input id="t-subject" type="text" name="subject" value="{{ email_tpl.subject }}" required maxlength="200" class="tpl-text">
+
+        <label class="f" for="t-body" style="margin-top:14px">Body</label>
+        <div class="chips" aria-label="Insert a placeholder">
+          <span class="small muted">Insert:</span>
+          {% for p in placeholders %}<button type="button" class="chip" data-insert="{{ '{' ~ p ~ '}' }}">{{ '{' ~ p ~ '}' }}</button>{% endfor %}
+        </div>
+        <textarea id="t-body" name="body" rows="16" required maxlength="5000" class="tpl-text">{{ email_tpl.body }}</textarea>
+        <p class="small muted">Placeholders are filled in for each application: <code>{company}</code> and <code>{role}</code> come from the job posting, <code>{email}</code> is your Gmail address, and the rest come from your details above.</p>
+
+        <div class="controls" style="margin-top:12px">
+          <button class="primary">Save template</button>
+        </div>
+      </form>
+      <form method="post" action="{{ url_for('reset_template') }}" style="margin-top:10px"
+            onsubmit="return confirm('Reset the email template and your details to the defaults in config.yaml?')">
+        <button class="ghost small">Reset to default</button>
+      </form>
+    </div>
+
+    <div class="card preview-card">
+      <h2>Preview <span class="muted small">(example posting)</span></h2>
+      <div class="mail">
+        <div class="mail-head small">
+          <div><span class="muted">From:</span> <span id="pv-from"></span></div>
+          <div><span class="muted">To:</span> hr@acme-technologies.example</div>
+          <div><span class="muted">Subject:</span> <strong id="pv-subject"></strong></div>
+        </div>
+        <div class="mail-body" id="pv-body"></div>
+        <div class="mail-att small">📎 <span id="pv-att"></span>{% if not resume %} <span class="muted">(no resume uploaded yet)</span>{% endif %}</div>
+      </div>
+      <p class="small muted">Example values: company “Acme Technologies”, role “{{ (profile.role_titles or ['Python Developer'])[0] }}”. Unknown placeholders are shown in red and can't be saved.</p>
+    </div>
+  </div>
+</section>
+
 <!-- ============================ SETTINGS -->
 <section class="panel" id="settings">
   <div class="card">
@@ -479,6 +549,49 @@ document.querySelectorAll("[data-status-filter]").forEach(el => el.addEventListe
     if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") { e.preventDefault(); alert("Please choose a PDF file."); }
     else if (file.size > 3 * 1024 * 1024) { e.preventDefault(); alert("The resume must be under 3 MB."); }
   });
+})();
+
+// email template: placeholder chips + live preview
+(function () {
+  const form = document.getElementById("tpl-form");
+  if (!form) return;
+  const allowed = {{ placeholders|list|tojson }};
+  const subject = document.getElementById("t-subject"), body = document.getElementById("t-body");
+  let lastField = body;
+  [subject, body].forEach(el => el.addEventListener("focus", () => lastField = el));
+  form.querySelectorAll("[data-insert]").forEach(btn => btn.addEventListener("click", () => {
+    const el = lastField, text = btn.dataset.insert;
+    const start = el.selectionStart ?? el.value.length, end = el.selectionEnd ?? el.value.length;
+    el.value = el.value.slice(0, start) + text + el.value.slice(end);
+    el.focus(); el.selectionStart = el.selectionEnd = start + text.length;
+    render();
+  }));
+  function values() {
+    const v = { company: "Acme Technologies", role: {{ ((profile.role_titles or ["Python Developer"])[0])|tojson }},
+                email: {{ (gmail_user or "you@gmail.com")|tojson }} };
+    form.querySelectorAll("[data-ph]").forEach(i => v[i.dataset.ph] = i.value);
+    return v;
+  }
+  function fill(target, text, v) {   // builds DOM nodes, never innerHTML
+    target.textContent = "";
+    let last = 0;
+    text.replace(/\{(\w*)\}/g, (m, name, idx) => {
+      target.append(text.slice(last, idx));
+      if (allowed.includes(name)) target.append(v[name] || "");
+      else { const b = document.createElement("span"); b.className = "ph-bad"; b.textContent = m; target.append(b); }
+      last = idx + m.length;
+    });
+    target.append(text.slice(last));
+  }
+  function render() {
+    const v = values();
+    fill(document.getElementById("pv-subject"), subject.value, v);
+    fill(document.getElementById("pv-body"), body.value, v);
+    document.getElementById("pv-from").textContent = `${v.name || "Your name"} <${v.email}>`;
+    document.getElementById("pv-att").textContent = `${(v.name || "Resume").replace(/ /g, "_")}_Resume.pdf`;
+  }
+  form.addEventListener("input", render);
+  render();
 })();
 
 // "Run now" can take a few minutes: confirm, then show progress

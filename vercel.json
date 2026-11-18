@@ -1,12 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/index.py": {
+    "app.py": {
       "maxDuration": 300,
       "includeFiles": "{dashboard.py,config.yaml,job_profile.yaml,jobbot/**,templates/**}"
     }
   },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
   "schedules": {
     "job-applier": {
       "schedule": "*/15 * * * *",

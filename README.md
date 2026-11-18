@@ -6,7 +6,7 @@ It runs on **Vercel** (free Hobby plan) with a **Neon Postgres** database (free 
 
 ## Deploy to Vercel
 
-1. **Push this repo to GitHub** and import it in Vercel (Add New → Project). Vercel detects the Python app from `vercel.json`; no build settings are needed.
+1. **Push this repo to GitHub** and import it in Vercel (Add New → Project). Vercel detects the Flask app in `app.py`; leave the framework preset as detected (Flask) or Other, with no build settings.
 2. **Add the database.** In the project, go to Storage → Create Database → **Neon** (free) and connect it. This sets `DATABASE_URL` for you. The tables are created automatically on first use.
 3. **Add environment variables** (Settings → Environment Variables):
 
@@ -38,6 +38,7 @@ Each run is limited to about 3 minutes, under Vercel's 300-second function limit
 - **Overview**: applications emailed, sent today against the daily limit, openings found, applied manually, failed sends, a 14-day chart, the last run's result and when the next application is due.
 - **Email applications**: every email sent, with search, a status filter and CSV download.
 - **Job openings**: every matching opening, with a link, experience, work mode and a short description. Apply on the site, then click **Mark applied**. CSV download is available too.
+- **Email template**: subject, body and your details (name, phone, LinkedIn, experience), with placeholders and a live preview.
 - **Job profile**: job description, titles, keywords, excluded words, experience range, locations, work mode and match strictness.
 - **Settings**: a setup checklist, interval, daily limit, test recipient, active hours and resume upload.
 - **Bot log**: the latest lines from the bot's runs.
@@ -47,11 +48,11 @@ Each run is limited to about 3 minutes, under Vercel's 300-second function limit
 
 | File | What it holds |
 |---|---|
-| `config.yaml` | Timezone, default sending settings, search sources, your name/phone/LinkedIn, and the **email subject and body template** |
+| `config.yaml` | Timezone, search sources, and the *defaults* for sending settings and the email template |
 | `job_profile.yaml` | The default job profile. It is copied into the database on the first run; after that, edit it in the dashboard |
 | `vercel.json` | Vercel function settings and the 15-minute schedule |
 
-Changes to `config.yaml` (such as the email template) take effect after you push and Vercel redeploys.
+The job profile, email template, your contact details, sending settings and resume are all edited in the dashboard and stored in the database, so they never need a commit. Keep personal details out of `config.yaml` if the repo is public. Other changes to `config.yaml` (timezone, search sources) take effect after you push and Vercel redeploys.
 
 ## Run locally
 

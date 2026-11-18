@@ -149,3 +149,30 @@ def test_untagged_openings_adopted(store):
     store.add_opening({"found_at": "x", "url": "https://legacy.com/1"})  # saved by an older version
     store.adopt_untagged_openings("abc")
     assert [o["url"] for o in store.openings("abc")] == ["https://legacy.com/1"]
+
+
+def test_email_template_validation():
+    from jobbot.config import validate_email_template
+    ok = validate_email_template({"subject": "Application for {role}\n- {name}", "body": "Hi {company},\r\nThanks",
+                                  "applicant": {"name": " Asha ", "phone": "1", "linkedin": "", "experience": "3"}})
+    assert ok["subject"] == "Application for {role} - {name}" and ok["body"] == "Hi {company},\nThanks"
+    assert ok["applicant"]["name"] == "Asha"
+    for bad in ({"subject": "Hi {compnay}", "body": "x"},       # typo in placeholder
+                {"subject": "Hi {company", "body": "x"},        # unmatched brace
+                {"subject": "", "body": "x"}):
+        with pytest.raises(ConfigError):
+            validate_email_template({**bad, "applicant": {"name": "A"}})
+    with pytest.raises(ConfigError):
+        validate_email_template({"subject": "s", "body": "b", "applicant": {"name": ""}})
+
+
+def test_saved_template_is_used_for_emails(store, project):
+    from jobbot import mailer
+    from jobbot.config import save_email_template
+    save_email_template(store, {"subject": "Re: {role} at {company}", "body": "Dear {company} team,\n{name} ({experience} yrs)",
+                                "applicant": {"name": "Asha Rao", "phone": "", "linkedin": "", "experience": "4"}})
+    cfg = load_config(project / "config.yaml", store, require_mail=False)
+    lead = Lead(company="Acme Inc.", title="Backend Engineer", url="https://x", source="remotive")
+    subject, body = mailer.render(cfg, lead)
+    assert subject == "Re: Backend Engineer at Acme Inc"
+    assert body == "Dear Acme Inc team,\nAsha Rao (4 yrs)"

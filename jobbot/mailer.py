@@ -23,11 +23,16 @@ def email_role(cfg: Config, lead: Lead) -> str:
     return lead.role or cfg.role_titles[0]
 
 
+def fill(subject: str, body: str, applicant: dict, company: str, role: str, email: str) -> tuple[str, str]:
+    """Replace {placeholders} in the subject and body."""
+    values = _SafeDict({k: str(v) for k, v in applicant.items()})
+    values.update(company=(company or "your organization").strip().rstrip("."), role=role, email=email)
+    return subject.format_map(values), body.format_map(values)
+
+
 def render(cfg: Config, lead: Lead) -> tuple[str, str]:
-    values = _SafeDict({k: str(v) for k, v in cfg.applicant.items()})
-    values.update(company=(lead.company or "your organization").strip().rstrip("."),
-                  role=email_role(cfg, lead), email=cfg.gmail_user)
-    return cfg.email_subject.format_map(values), cfg.email_body.format_map(values)
+    return fill(cfg.email_subject, cfg.email_body, cfg.applicant, lead.company,
+                email_role(cfg, lead), cfg.gmail_user)
 
 
 def build_message(cfg: Config, lead: Lead, to_addr: str) -> EmailMessage:
